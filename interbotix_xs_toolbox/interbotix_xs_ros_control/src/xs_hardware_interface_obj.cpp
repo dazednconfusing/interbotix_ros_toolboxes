@@ -110,7 +110,7 @@ void XSHardwareInterface::write(ros::Duration elapsed_time)
   interbotix_xs_msgs::JointSingleCommand gripper_msg;
   group_msg.name = group_name;
   gripper_msg.name = "gripper";
-  gripper_msg.cmd = joint_position_commands.back() * 2;
+  gripper_msg.cmd = joint_position_commands.back() * 2 * (1.0 / 0.08);
 
   position_joint_saturation_interface.enforceLimits(elapsed_time);
 

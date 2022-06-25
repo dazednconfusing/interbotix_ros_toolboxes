@@ -5,8 +5,8 @@ import modern_robotics as mr
 from interbotix_xs_msgs.msg import *
 from trajectory_msgs.msg import JointTrajectory
 from trajectory_msgs.msg import JointTrajectoryPoint
-from interbotix_common_modules import angle_manipulation as ang
-from interbotix_xs_modules import mr_descriptions as mrd
+import interbotix_common_modules.angle_manipulation as ang
+import interbotix_xs_modules.mr_descriptions as mrd
 from interbotix_xs_modules.core import InterbotixRobotXSCore
 from interbotix_xs_modules.gripper import InterbotixGripperXSInterface
 
@@ -23,7 +23,7 @@ from interbotix_xs_modules.gripper import InterbotixGripperXSInterface
 ### @param gripper_pressure_upper_limit - largest 'effort' that should be applied to the gripper if gripper_pressure is set to 1; it should be low enough that the motor doesn't 'overload' when gripping an object for a few seconds (~350 PWM or ~900 mA)
 ### @param init_node - set to True if the InterbotixRobotXSCore class should initialize the ROS node - this is the most Pythonic approach; to incorporate a robot into an existing ROS node though, set to False
 class InterbotixManipulatorXS(object):
-    def __init__(self, robot_model, group_name="arm", gripper_name="gripper", robot_name=None, moving_time=2.0, accel_time=0.3, use_gripper=True, gripper_pressure=0.5, gripper_pressure_lower_limit=150, gripper_pressure_upper_limit=350, init_node=True):
+    def __init__(self, robot_model, group_name="arm", gripper_name="gripper", robot_name=None, moving_time=2.0, accel_time=0.3, gripper_pressure=0.5, gripper_pressure_lower_limit=150, gripper_pressure_upper_limit=350, init_node=True):
         self.dxl = InterbotixRobotXSCore(robot_model, robot_name, init_node)
         self.arm = InterbotixArmXSInterface(self.dxl, robot_model, group_name, moving_time, accel_time)
         if gripper_name is not None:
@@ -95,8 +95,23 @@ class InterbotixArmXSInterface(object):
         # check position and velocity limits
         for x in range(self.group_info.num_joints):
             if not (self.group_info.joint_lower_limits[x] <= theta_list[x] <= self.group_info.joint_upper_limits[x]):
+                rospy.logwarn(
+                    "[xs_modules] Would exceed position limits on joint %s." % x
+                )
+                rospy.logwarn(
+                    "[xs_modules] Limits are [%f, %f], value was %f." % 
+                    (self.group_info.joint_lower_limits[x], 
+                    self.group_info.joint_upper_limits[x], theta_list[x])
+                )
                 return False
             if (speed_list[x] > self.group_info.joint_velocity_limits[x]):
+                rospy.logwarn(
+                    "[xs_modules] Would exceed velocity limits on joint %s." % x
+                )
+                rospy.logwarn(
+                    "[xs_modules] Limit is %f, value was %f." % 
+                    (self.group_info.joint_velocity_limits[x], theta_list[x])
+                )
                 return False
         return True
 
@@ -125,6 +140,7 @@ class InterbotixArmXSInterface(object):
     def set_joint_positions(self, joint_positions, moving_time=None, accel_time=None, blocking=True):
         if (self.check_joint_limits(joint_positions)):
             self.publish_positions(joint_positions, moving_time, accel_time, blocking)
+            return True
         else:
             return False
 
@@ -202,7 +218,7 @@ class InterbotixArmXSInterface(object):
                     self.T_sb = T_sd
                 return theta_list, True
 
-        rospy.loginfo("No valid pose could be found")
+        rospy.logwarn("No valid pose could be found. Returned theta_list variable may be nonsense.")
         return theta_list, False
 
     ### @brief Command a desired end-effector pose w.r.t. the Space frame

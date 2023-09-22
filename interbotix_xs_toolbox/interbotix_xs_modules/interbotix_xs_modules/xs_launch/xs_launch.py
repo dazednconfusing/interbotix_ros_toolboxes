@@ -1,3 +1,93 @@
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+from launch.actions import IncludeLaunchDescription, OpaqueFunction
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import PathJoinSubstitution, FindExecutable, Command
+import xacro
+
+
+def launch_setup(context, *args, **kwargs):
+    xacro_block = '/simply_ws/src/deep_grasp_demo/deep_grasp_task/urdf/objects/block.urdf.xacro'
+    doc_block = xacro.parse(open(xacro_block))
+    xacro.process_doc(doc_block)
+
+    xacro_table = '/simply_ws/src/deep_grasp_demo/deep_grasp_task/urdf/objects/table.urdf.xacro'
+    doc_table = xacro.parse(open(xacro_table))
+    xacro.process_doc(doc_table)
+    return [
+       # Declare arguments
+        #   DeclareLaunchArgument(
+        #     'use_gripper',
+        #     default_value=TextSubstitution(text=use_gripper),
+        #     choices=('true', 'false'),
+        #     description=(
+        #         'if `true`, the default gripper is included in the `robot_description`; '
+        #         'if `false`, it is left out; set to `false` if not using the default gripper.'
+        #     ),
+        # ),
+
+        Node(
+        package='ros_gz_sim',
+        executable='create',
+        output='screen',
+        arguments=['-string', doc_table.toxml(),
+                    '-x', '2.0',
+            '-y', '1.0',
+            '-z', '1.0',]),
+        #     Command([
+        #     FindExecutable(name='xacro'), ' ',
+            
+        #     PathJoinSubstitution([
+        #         FindPackageShare('deep_grasp_task'),
+        #         'urdf/objects/table.urdf.xacro '
+        #         'x:=0.4 y:=0 z:=0.00001 l:=0.4 w:=0.5 h:=0.00002'])]).perform(context)
+        # ]),
+        Node(
+        package='ros_gz_sim',
+        executable='create',
+        output='screen',
+        arguments=['-string', doc_block.toxml(),
+                           '-x', '-2.0',
+            '-y', '1.0',
+            '-z', '1.0',]),
+        #     Command([
+        #     FindExecutable(name='xacro'), ' ',
+            
+        #     PathJoinSubstitution([
+        #         FindPackageShare('deep_grasp_task'),
+        #         'urdf/objects/block.urdf.xacro x:=0.4 y:=-0.1 z:=0.013'])]).perform(context)
+        # ]),
+       IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([
+                FindPackageShare('interbotix_xslocobot_moveit'),
+                'launch',
+                'xslocobot_moveit.launch.py',
+            ])
+        ]),
+        launch_arguments={
+             'hardware_type': 'gz_ignition',
+             'robot_model': 'locobot_wx250s',
+            'use_rviz': 'false',
+            'use_sim_time': 'true',
+        }.items()
+        # condition=IfCondition(
+        #     PythonExpression(
+        #         ['"', hardware_type_launch_arg, '"', " in ('actual', 'fake')"]
+        #     )
+        ),
+        
+    ]
+
+def generate_launch_description():
+    return LaunchDescription([OpaqueFunction(function=launch_setup)])
+
+
+
+
+
+
 # Copyright 2022 Trossen Robotics
 #
 # Redistribution and use in source and binary forms, with or without
@@ -100,7 +190,6 @@ class DeclareInterbotixXSLoCoBotRobotDescriptionLaunchArgument(DeclareLaunchArgu
             'robot_name:=', LaunchConfiguration('robot_name'), ' ',
             'base_model:=', LaunchConfiguration('base_type'), ' ',
             'robot_model:=', LaunchConfiguration('robot_model'), ' ',
-            'robot_name:=', LaunchConfiguration('robot_name'), ' ',
             'use_gripper:=', LaunchConfiguration('use_gripper'), ' ',
             'show_ar_tag:=', LaunchConfiguration('show_ar_tag'), ' ',
             'show_gripper_bar:=', LaunchConfiguration('show_gripper_bar'), ' ',
@@ -293,6 +382,7 @@ def declare_interbotix_xsarm_robot_description_launch_arguments(
                 'actual',
                 'fake',
                 'gz_classic',
+                'gz_ignition',
             ),
             default_value=hardware_type,
             description=(
@@ -312,6 +402,7 @@ def declare_interbotix_xslocobot_robot_description_launch_arguments(
     show_gripper_fingers: Text = 'true',
     external_urdf_loc: Text = '',
     hardware_type: Text = 'actual',
+    use_lidar: Text = 'false',
 ) -> List[DeclareLaunchArgument]:
     """
     Return the `robot_description` DeclareLaunchArgument and its required children.
@@ -387,11 +478,22 @@ def declare_interbotix_xslocobot_robot_description_launch_arguments(
                 'actual',
                 'fake',
                 'gz_classic',
+                'gz_ignition'
             ),
             default_value=hardware_type,
             description=(
                 'configures the `robot_description` to use the actual hardware, fake '
                 'hardware, or hardware simulated in Gazebo.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'use_lidar',
+            choices=(
+                'true', 'false'
+            ),
+            default_value=use_lidar,
+            description=(
+                'Use lidar'
             ),
         ),
         DeclareInterbotixXSLoCoBotRobotDescriptionLaunchArgument(),
@@ -409,7 +511,7 @@ def determine_use_sim_time_param(
     :param hardware_type: The `hardware_type` LaunchConfiguration
     :return: True if hardware is simulated, the `use_sim_time` LaunchConfiguration otherwise
     """
-    if hardware_type_launch_arg.perform(context) in ('gz_classic'):
+    if hardware_type_launch_arg.perform(context) in ('gz_classic', 'gz_ignition'):
         return TextSubstitution(text='true')
     else:
         return LaunchConfiguration('use_sim_time')

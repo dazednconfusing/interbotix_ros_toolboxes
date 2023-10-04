@@ -1,0 +1,223 @@
+diff --git a/interbotix_common_toolbox/interbotix_common_sim/worlds/interbotix.world b/interbotix_common_toolbox/interbotix_common_sim/worlds/interbotix.world
+index fe735f8..d3af6f9 100644
+--- a/interbotix_common_toolbox/interbotix_common_sim/worlds/interbotix.world
++++ b/interbotix_common_toolbox/interbotix_common_sim/worlds/interbotix.world
+@@ -1,18 +1,45 @@
+ <?xml version="1.0" ?>
+-<sdf version="1.5">
+-  <world name="default">
+-    <!-- A global light source -->
+-    <include>
+-      <uri>model://sun</uri>
+-    </include>
+-    <!-- A ground plane -->
+-    <include>
+-      <uri>model://ground_plane</uri>
+-    </include>
+-    <!-- Trossen Robotics Offices -->
+-    <include>
+-      <uri>model://TrossenRoboticsOfficeBuilding</uri>
+-      <pose>0 2 0 0 0 0</pose>
+-    </include>
++<sdf version="1.6">
++  <world name="empty">
++    <light type="directional" name="sun">
++      <cast_shadows>true</cast_shadows>
++      <pose>0 0 10 0 0 0</pose>
++      <diffuse>0.8 0.8 0.8 1</diffuse>
++      <specular>0.2 0.2 0.2 1</specular>
++      <attenuation>
++        <range>1000</range>
++        <constant>0.9</constant>
++        <linear>0.01</linear>
++        <quadratic>0.001</quadratic>
++      </attenuation>
++      <direction>-0.5 0.1 -0.9</direction>
++    </light>
++
++    <model name="ground_plane">
++      <static>true</static>
++      <link name="link">
++        <collision name="collision">
++          <geometry>
++            <plane>
++              <normal>0 0 1</normal>
++              <size>100 100</size>
++            </plane>
++          </geometry>
++        </collision>
++        <visual name="visual">
++          <geometry>
++            <plane>
++              <normal>0 0 1</normal>
++              <size>100 100</size>
++            </plane>
++          </geometry>
++          <material>
++            <ambient>0.8 0.8 0.8 1</ambient>
++            <diffuse>0.8 0.8 0.8 1</diffuse>
++            <specular>0.8 0.8 0.8 1</specular>
++          </material>
++        </visual>
++      </link>
++    </model>
+   </world>
+-</sdf>
++</sdf>
+\ No newline at end of file
+diff --git a/interbotix_xs_toolbox/interbotix_xs_modules/interbotix_xs_modules/xs_launch/xs_launch.py b/interbotix_xs_toolbox/interbotix_xs_modules/interbotix_xs_modules/xs_launch/xs_launch.py
+index 6da31e1..7952b49 100644
+--- a/interbotix_xs_toolbox/interbotix_xs_modules/interbotix_xs_modules/xs_launch/xs_launch.py
++++ b/interbotix_xs_toolbox/interbotix_xs_modules/interbotix_xs_modules/xs_launch/xs_launch.py
+@@ -1,3 +1,93 @@
++from launch import LaunchDescription
++from launch_ros.actions import Node
++from launch_ros.substitutions import FindPackageShare
++from launch.actions import IncludeLaunchDescription, OpaqueFunction
++from launch.launch_description_sources import PythonLaunchDescriptionSource
++from launch.substitutions import PathJoinSubstitution, FindExecutable, Command
++import xacro
++
++
++def launch_setup(context, *args, **kwargs):
++    xacro_block = '/simply_ws/src/deep_grasp_demo/deep_grasp_task/urdf/objects/block.urdf.xacro'
++    doc_block = xacro.parse(open(xacro_block))
++    xacro.process_doc(doc_block)
++
++    xacro_table = '/simply_ws/src/deep_grasp_demo/deep_grasp_task/urdf/objects/table.urdf.xacro'
++    doc_table = xacro.parse(open(xacro_table))
++    xacro.process_doc(doc_table)
++    return [
++       # Declare arguments
++        #   DeclareLaunchArgument(
++        #     'use_gripper',
++        #     default_value=TextSubstitution(text=use_gripper),
++        #     choices=('true', 'false'),
++        #     description=(
++        #         'if `true`, the default gripper is included in the `robot_description`; '
++        #         'if `false`, it is left out; set to `false` if not using the default gripper.'
++        #     ),
++        # ),
++
++        Node(
++        package='ros_gz_sim',
++        executable='create',
++        output='screen',
++        arguments=['-string', doc_table.toxml(),
++                    '-x', '2.0',
++            '-y', '1.0',
++            '-z', '1.0',]),
++        #     Command([
++        #     FindExecutable(name='xacro'), ' ',
++            
++        #     PathJoinSubstitution([
++        #         FindPackageShare('deep_grasp_task'),
++        #         'urdf/objects/table.urdf.xacro '
++        #         'x:=0.4 y:=0 z:=0.00001 l:=0.4 w:=0.5 h:=0.00002'])]).perform(context)
++        # ]),
++        Node(
++        package='ros_gz_sim',
++        executable='create',
++        output='screen',
++        arguments=['-string', doc_block.toxml(),
++                           '-x', '-2.0',
++            '-y', '1.0',
++            '-z', '1.0',]),
++        #     Command([
++        #     FindExecutable(name='xacro'), ' ',
++            
++        #     PathJoinSubstitution([
++        #         FindPackageShare('deep_grasp_task'),
++        #         'urdf/objects/block.urdf.xacro x:=0.4 y:=-0.1 z:=0.013'])]).perform(context)
++        # ]),
++       IncludeLaunchDescription(
++        PythonLaunchDescriptionSource([
++            PathJoinSubstitution([
++                FindPackageShare('interbotix_xslocobot_moveit'),
++                'launch',
++                'xslocobot_moveit.launch.py',
++            ])
++        ]),
++        launch_arguments={
++             'hardware_type': 'gz_ignition',
++             'robot_model': 'locobot_wx250s',
++            'use_rviz': 'false',
++            'use_sim_time': 'true',
++        }.items()
++        # condition=IfCondition(
++        #     PythonExpression(
++        #         ['"', hardware_type_launch_arg, '"', " in ('actual', 'fake')"]
++        #     )
++        ),
++        
++    ]
++
++def generate_launch_description():
++    return LaunchDescription([OpaqueFunction(function=launch_setup)])
++
++
++
++
++
++
+ # Copyright 2022 Trossen Robotics
+ #
+ # Redistribution and use in source and binary forms, with or without
+@@ -100,7 +190,6 @@ class DeclareInterbotixXSLoCoBotRobotDescriptionLaunchArgument(DeclareLaunchArgu
+             'robot_name:=', LaunchConfiguration('robot_name'), ' ',
+             'base_model:=', LaunchConfiguration('base_type'), ' ',
+             'robot_model:=', LaunchConfiguration('robot_model'), ' ',
+-            'robot_name:=', LaunchConfiguration('robot_name'), ' ',
+             'use_gripper:=', LaunchConfiguration('use_gripper'), ' ',
+             'show_ar_tag:=', LaunchConfiguration('show_ar_tag'), ' ',
+             'show_gripper_bar:=', LaunchConfiguration('show_gripper_bar'), ' ',
+@@ -293,6 +382,7 @@ def declare_interbotix_xsarm_robot_description_launch_arguments(
+                 'actual',
+                 'fake',
+                 'gz_classic',
++                'gz_ignition',
+             ),
+             default_value=hardware_type,
+             description=(
+@@ -312,6 +402,7 @@ def declare_interbotix_xslocobot_robot_description_launch_arguments(
+     show_gripper_fingers: Text = 'true',
+     external_urdf_loc: Text = '',
+     hardware_type: Text = 'actual',
++    use_lidar: Text = 'false',
+ ) -> List[DeclareLaunchArgument]:
+     """
+     Return the `robot_description` DeclareLaunchArgument and its required children.
+@@ -387,6 +478,7 @@ def declare_interbotix_xslocobot_robot_description_launch_arguments(
+                 'actual',
+                 'fake',
+                 'gz_classic',
++                'gz_ignition'
+             ),
+             default_value=hardware_type,
+             description=(
+@@ -394,6 +486,16 @@ def declare_interbotix_xslocobot_robot_description_launch_arguments(
+                 'hardware, or hardware simulated in Gazebo.'
+             ),
+         ),
++        DeclareLaunchArgument(
++            'use_lidar',
++            choices=(
++                'true', 'false'
++            ),
++            default_value=use_lidar,
++            description=(
++                'Use lidar'
++            ),
++        ),
+         DeclareInterbotixXSLoCoBotRobotDescriptionLaunchArgument(),
+     ]
+ 
+@@ -409,7 +511,7 @@ def determine_use_sim_time_param(
+     :param hardware_type: The `hardware_type` LaunchConfiguration
+     :return: True if hardware is simulated, the `use_sim_time` LaunchConfiguration otherwise
+     """
+-    if hardware_type_launch_arg.perform(context) in ('gz_classic'):
++    if hardware_type_launch_arg.perform(context) in ('gz_classic', 'gz_ignition'):
+         return TextSubstitution(text='true')
+     else:
+         return LaunchConfiguration('use_sim_time')
